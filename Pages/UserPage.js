@@ -3,11 +3,7 @@ import { StyleSheet, Text, View, Button, FlatList, Alert } from 'react-native';
 import ProductCard from '../Components/ProductCard'
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { UserContext } from '../Context/UserContext';
-
-const apiFavorites = 'http://proj10.ruppin-tech.co.il/api/Favorites/'
-
-const apiIngs = 'http://proj10.ruppin-tech.co.il/api/GetIngredientsInfo/'
-
+import { GetAllFavorites, GetIngsFromFavorites } from '../Fetchs'
 
 
 export default function UserPage2() {
@@ -29,8 +25,16 @@ export default function UserPage2() {
 
     const getAllIngData = async () => {
         console.log("productList", productList)
+        let ing_list = []
+        let value = {}
+        let dictTemp = productDict
+
         for (const product of productList) {
-            await GetIngs(product.id_prod)
+            dictTemp = productDict
+            ing_list = await GetIngsFromFavorites(product.id_prod)
+            value = createDictValues(ing_list)
+            dictTemp[product.id_prod] = value
+            setProductDict(dictTemp)
         }
         setShowCards(true)
     }
@@ -40,81 +44,12 @@ export default function UserPage2() {
 
 
     useEffect(async () => {
-        if (productList === null)
-            await GetAllFavorites()
+        if (productList === null) {
+            let product_list = await GetAllFavorites(user.id)
+            setProductList(product_list)
+        }
     }, [])
 
-    const GetAllFavorites = async () => {
-
-        fetch(apiFavorites + user.id, {
-            method: 'GET',
-            headers: new Headers({
-                'Content-Type': 'application/json; charset=UTF-8',
-                'Accept': 'application/json; charset=UTF-8'
-            })
-        })
-            .then(res => {
-                console.log('res.status', res.status);
-                console.log('res.ok', res.ok);
-                if (res.ok) {
-                    return res.json()
-                }
-                else
-                    return null;
-
-            })
-            .then(
-                (result) => {
-                    setProductList(result)
-                    console.log("GetAllFavorites = ", result);
-                },
-                (error) => {
-                    console.log("err GET=", error);
-                });
-    };
-
-
-    const GetIngs = async (product_id) => {
-
-        await fetch(apiIngs + product_id, {
-            method: 'GET',
-            // body: JSON.stringify(UserById),
-            headers: new Headers({
-                //   'Content-Type': 'application/json; charset=UTF-8',
-                'Content-Type': 'multipart/form-data',
-                'Accept': 'application/json; charset=UTF-8'
-            })
-        })
-            .then(res => {
-                console.log('res.status', res.status);
-                console.log('res.ok', res.ok);
-
-                if (res.ok) {
-                    return res.json()
-                }
-                else
-                    return null;
-
-            })
-            .then(
-                (result) => {
-                    debugger
-                    console.log(product_id)
-                    console.log("GetIngs", result)
-                    let dictTemp = productDict
-                    console.log(dictTemp)
-                    let value = createDictValues(result)
-                    console.log("value = ", value);
-                    dictTemp[product_id] = value
-                    console.log("dict[] = ", dictTemp);
-                    setProductDict(dictTemp)
-
-                },
-                (error) => {
-                    console.log("err GET=", error);
-                });
-
-    }
 
     const createDictValues = (result) => {
         let value = { name: result[0].product_name, ing_list: [] }

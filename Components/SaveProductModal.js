@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Modal, StyleSheet, View, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
+import { Modal, StyleSheet, View, TouchableOpacity, TouchableWithoutFeedback, Alert } from 'react-native';
 import { Button, TextInput } from 'react-native-paper';
 
 
-
-const AddIngModal = ({ addIng }) => {
+const SaveProductModal = ({ saveProduct }) => {
     const [modalVisible, setModalVisible] = useState(false);
-    const [text, setText] = useState("");
+    const [name, setName] = useState("");
+    const [category, setCategory] = useState("");
 
     return (
         <View>
@@ -25,16 +25,30 @@ const AddIngModal = ({ addIng }) => {
                     <View style={styles.centeredView}>
                         <TouchableWithoutFeedback>
                             <View style={styles.modalView}>
-                                <View style={{ flex: 1, justifyContent: 'space-between' }}>
+                                <View style={{ flex: 1, justifyContent: 'space-between', flexDirection: 'column', }}>
                                     <TextInput
                                         style={styles.input}
-                                        label="הכנס רכיב"
-                                        value={text}
-                                        onChangeText={text => setText(text)}
-
+                                        label="שם מוצר"
+                                        value={name}
+                                        onChangeText={text => setName(text)}
+                                    />
+                                    <TextInput
+                                        style={styles.input}
+                                        label="קטגוריה (לא חובה)"
+                                        value={category}
+                                        onChangeText={text => setCategory(text)}
                                     />
                                     <Button style={styles.buttonClose} mode="contained" color="black"
-                                        onPress={() => { addIng(text); setModalVisible(!modalVisible) }}>הוסף רכיב</Button>
+                                        onPress={() => {
+                                            if (name === "") {
+                                                Alert.alert("חובה לרשום שם מוצר")
+
+                                            }
+                                            else {
+                                                saveProduct(name, category);
+                                                setModalVisible(!modalVisible)
+                                            }
+                                        }}>שמור</Button>
                                 </View>
 
                             </View>
@@ -43,7 +57,7 @@ const AddIngModal = ({ addIng }) => {
                     </View>
                 </TouchableOpacity>
             </Modal>
-            <Button color='white' mode="contained" onPress={() => setModalVisible(true)}>הוסף רכיב ידני</Button>
+            <Button color='white' mode="contained" onPress={() => setModalVisible(true)}>שמור מוצר</Button>
         </View>
     );
 };
@@ -69,7 +83,7 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 5,
         width: 300,
-        height: 200,
+        height: 300,
     },
     textStyle: {
         color: 'black',
@@ -83,4 +97,4 @@ const styles = StyleSheet.create({
 
 });
 
-export default AddIngModal;
+export default SaveProductModal;

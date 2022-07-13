@@ -8,10 +8,11 @@ import { ScrollView } from 'react-native-gesture-handler';
 import { Button } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import camra_rotate from '../assets/camera-rotate-solid.svg'
-import { Ionicons, MaterialIcons } from '@expo/vector-icons'
+import { Ionicons, MaterialIcons, FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons'
 import HTMLParser from 'fast-html-parser'
 import AddIngModal from '../Components/AddIngModal';
-
+import { google_api, getIngExplansion } from '../Fetchs'
+import SaveProductModal from '../Components/SaveProductModal';
 
 let str = "רכיבים: קמח חיטה מלא (3.8%) (מכיל גלוטן), ממתיקים,"
 str += "\n"
@@ -26,9 +27,7 @@ str += "\n"
 str += "חמצון (תערובת טוקופרולים),קקה."
 
 let ing_to_put = {}
-let ing_list_ocr = []
 let current_ing = ""
-let ing_to_replace = ""
 
 export default function CameraPage({ navigation }) {
 
@@ -39,6 +38,7 @@ export default function CameraPage({ navigation }) {
     const [type, setType] = useState(Camera.Constants.Type.back);
     const isFocused = useIsFocused();
     const [text, setText] = useState("");
+    const [screen, setScreen] = useState("camera");
 
     const [textArr, setTextArr] = useState(null);
     const [textArrTEmp, setTextArrTemp] = useState(null);
@@ -53,6 +53,15 @@ export default function CameraPage({ navigation }) {
             setHasPermission(status === 'granted');
         })();
     }, []);
+
+    useEffect(() => {
+        if (image !== null)
+            setScreen("image")
+    }, [image])
+
+
+
+
 
     if (hasPermission === null) {
         return <View />;
@@ -73,52 +82,42 @@ export default function CameraPage({ navigation }) {
     }
 
 
+
+
     //ocr
-    const pickImage = async () => {
+    const getData = async () => {
 
 
         setText("Loading.."); //set value of text Hook
+        console.log("img")
 
+        const text_from_img = await google_api(imageData.base64)
+        console.log(text_from_img)
 
+        if (text_from_img === "שגיאה") {
+            setText("שגיאה")
+            return
+        }
 
+        let ing_list_ocr = await GetIngredientsFromText(text_from_img)
+        if (ing_list_ocr === null) {
+            setText("לא נמצאו רכיבים")
+            return
+        }
 
-        //const responseData = await callGoogleVisionAsync(imageData.base64);
+        const ing_exp = await getIngExplansion(ing_list_ocr)
 
-        let responseData = ""
-        await fetch('https://google-text-api.herokuapp.com/api/google_text', {
-            method: 'POST',
-            body: JSON.stringify({ text: imageData.base64 }),
-            headers: {
-                Accept: 'application/json',
-                'Content-Type': 'application/json',
-            }
-        })
-            .then(res => {
-                console.log('res.status', res.status);
-                console.log('res.ok', res.ok);
-                if (res.ok) {
-                    return res.json()
-                }
-                else
-                    return null;
+        if (ing_exp === "שגיאה") {
+            setText("שגיאה")
+            return
+        }
 
-            })
-            .then(
-                (result) => {
-                    console.log("result", result);
-                    responseData = result
-                },
-                (error) => {
+        console.log("sdfdsfsdfsdf" + ing_exp)
 
-                    console.log("err GET=", error);
-                });
-
-        console.log(responseData)
-
-        ing_list_ocr = GetIngredientsFromText(responseData)
-        getIngExplansion(ing_list_ocr)
-
-
+        setText("")
+        setTextDict(ing_exp)
+        setTextArr(Object.keys(ing_exp))
+        setScreen("ingredients")
     };
 
     const GetIngredientsFromText = (text) => {
@@ -127,6 +126,9 @@ export default function CameraPage({ navigation }) {
 
 
         let ing_index_start = text.indexOf("רכיבים")
+        if (ing_index_start === -1) {
+            return null
+        }
         ing_index_start += 7
 
         let ing_index_end;
@@ -154,70 +156,20 @@ export default function CameraPage({ navigation }) {
 
     }
 
-    /*
-    const addCheckIngSign = async (ing) => {
-
-        await getIngExplansion(ing, true)
-    }
-*/
-    const getIngExplansion = async (ing_list, replace = false, add = false) => {
-        console.log(add)
-        fetch('https://ingredients-data-api.herokuapp.com/get_ingredients', {
-            method: 'POST',
-            body: JSON.stringify(ing_list),
-            headers: new Headers({
-                //   'Content-Type': 'application/json; charset=UTF-8',
-                'Content-Type': 'multipart/form-data',
-                'Accept': 'application/json; charset=UTF-8'
-            })
-        })
-            .then(res => {
-                console.log('res.status', res.status);
-                console.log('res.ok', res.ok);
-                if (res.ok) {
-                    return res.json()
-                }
-                else
-                    return null;
-
-            })
-            .then(
-                (result) => {
-                    console.log("result", result);
-                    !replace ? (
-                        setText(""),
-                        setTextDict(result),
-                        setTextArr(Object.keys(result))
-                    )
-                        :
-                        !add ?
-                            (
-                                ing_to_put = result[ing_list[0]],
-                                setText(ing_to_put.description)
-                            )
-                            :
-                            (
-                                console.log("dsfsdfsdfsdfsdfsdfsdfsdfsdfsdf"),
-                                addIngredient(result[ing_list[0]])
-                            )
 
 
-                },
-                (error) => {
-
-                    console.log("err GET=", error);
-                });
+    const getIngToReplaceDesc = async (ing) => {
+        ing_to_put = await getIngExplansion([ing])
+        ing_to_put = ing_to_put[ing]
+        setText(ing_to_put.description)
     }
 
-
-    const getIngToReplaceDesc = (ing) => {
-
-        getIngExplansion([ing], true)
-    }
-
-    const addIngredient = (ing) => {
+    const addIngredient = async (ing) => {
+        let ing_to_add = await getIngExplansion([ing])
+        ing_to_add = ing_to_add[ing]
         let tempDict = textDict
-        tempDict[ing.ingredient] = ing
+        tempDict[ing] = ing_to_add
+        console.log(tempDict)
         setTextDict(tempDict)
         setTextArr(Object.keys(tempDict))
     }
@@ -242,32 +194,60 @@ export default function CameraPage({ navigation }) {
         textArrTEmp != null ? setTextArrTemp(null) : setText("")
     }
 
+    const saveProduct = (prod_name, prod_category = "") => {
+
+        let check_if_not_found = false
+        textArr.map((ing_name) => {
+            if (!textDict[ing_name].found) {
+                check_if_not_found = true
+                return
+            }
+        })
+        if (check_if_not_found) {
+            Alert.alert("קיים רכיב ללא הסבר מחק או החלף רכיב")
+            return
+        }
+
+
+        let ing_list = []
+        textArr.map((ing_name) => {
+            let ing = { name: ing_name, desc: textDict[ing_name].description }
+            ing_list = [...ing_list, ing]
+        })
+
+        let product = {
+            name: prod_name,
+            category: prod_category,
+            ingerdients: ing_list
+        }
+
+        console.log(product)
+    }
+
 
 
     return (
         <View style={{ flex: 1 }}>
             <View style={styles.camera_container}
             >
-                {image === null && textArr === null ?
+                {screen === "camera" ?
                     isFocused && <Camera
                         ref={ref => setCamera(ref)}
                         style={styles.fixed_ratio}
                         type={type}
                     >
                         <View style={{ alignSelf: 'baseline' }}>
-                            <Ionicons.Button size={30} name="camera-reverse" backgroundColor="black" color="white" onPress={() => {
-                                setType(
-                                    type === Camera.Constants.Type.back
-                                        ? Camera.Constants.Type.front
-                                        : Camera.Constants.Type.back
-                                );
-                            }} />
+                            <MaterialIcons.Button size={30} name="flip-camera-ios" iconStyle={{ marginRight: 0 }} backgroundColor="black"
+                                color="white" onPress={() => {
+                                    setType(
+                                        type === Camera.Constants.Type.back
+                                            ? Camera.Constants.Type.front
+                                            : Camera.Constants.Type.back
+                                    );
+                                }} />
                         </View>
-
-
-
                     </Camera>
-                    : textArr === null ?
+                    : screen === "image" ?
                         <View style={{ flex: 1 }}>
                             <Text style={{ fontSize: 20, textAlign: 'center', marginTop: 10 }}>{text}</Text>
                             <Image source={{ uri: image }} style={{
@@ -278,28 +258,31 @@ export default function CameraPage({ navigation }) {
                         </View>
 
                         :
-                        <View style={{ flex: 1, padding: 20, alignItems: 'center' }}>
+                        <View style={{ padding: 20, flex: 1, marginBottom: 2 }}>
                             {
                                 text != "" ?
-                                    <View style={{ flex: 1 }}>
-                                        <ScrollView style={{ height: '60%', marginBottom: 40 }}>
+                                    <View>
+                                        <ScrollView style={{ marginBottom: 10 }}>
                                             <Text style={{ fontSize: 20 }}>{text}</Text>
                                         </ScrollView>
 
 
-                                        <View style={{ flex: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                                        <View style={{ flexDirection: 'column', alignSelf: 'center' }}>
                                             {textArrTEmp != null ? <Button mode="contained" color="black"
                                                 onPress={() => { replaceIng(); setTextArrTemp(null) }}>
                                                 החלף רכיב</Button> : <Button mode="contained" color="red" onPress={() => deleteIngredient()}
-                                                    style={{ marginBottom: 30 }}>מחק רכיב</Button>
+                                                    style={{ marginBottom: 20 }}>מחק רכיב</Button>
                                             }
-                                            <Button style={{ marginTop: 20 }} mode="contained" color="black"
+                                            <Button style={{ marginTop: 10 }} mode="contained" color="black"
                                                 onPress={() => { setText("") }}>סגור</Button>
                                         </View>
 
                                     </View>
                                     :
-                                    <View>
+                                    <View style={{
+                                        backgroundColor: 'white', borderColor: 'black', borderWidth: 1, alignSelf: 'center',
+                                        padding: 10, borderRadius: 20, minWidth: 250
+                                    }}>
                                         {textArrTEmp != null ?
                                             <Text style={{ textAlign: 'center', fontSize: 20, marginBottom: 10 }}>האם התכוונת ל...</Text> : null}
                                         <FlatList
@@ -308,11 +291,11 @@ export default function CameraPage({ navigation }) {
                                             renderItem={({ item }) => (
                                                 <View style={{
                                                     flex: 1, flexDirection: 'row', justifyContent: 'center', padding: 5,
+                                                    marginBottom: 12,
                                                     alignItems: 'center',
-                                                    borderBottomColor: 'black',
-                                                    borderBottomWidth: 1,
+
                                                 }}>
-                                                    <Button color="black" onPress={() => {
+                                                    <Button color="rgba(140, 179, 217,0.4)" mode="contained" onPress={() => {
                                                         textArrTEmp === null && textDict[`${item}`].found ?
                                                             (
                                                                 current_ing = item,
@@ -337,32 +320,80 @@ export default function CameraPage({ navigation }) {
 
                                             )}
                                         />
-                                        {textArrTEmp !== null ? <View >
+
+                                        {textArrTEmp === null ?
+                                            <View style={{
+                                                flexDirection: 'row', alignSelf: 'flex-start', marginTop: 5
+                                            }}>
+
+                                                <MaterialIcons size={20} name="cancel" color="red" />
+                                                <Text style={{ alignSelf: 'flex-start', fontSize: 15, marginLeft: 10 }}>
+                                                    רכיב לא נמצא
+                                                </Text>
+                                            </View>
+
+                                            :
+                                            null}
+
+
+
+
+
+                                        {textArrTEmp !== null ? <View style={{ flexDirection: 'column', alignSelf: 'center' }}>
                                             <Button mode="contained" color="red" onPress={() => deleteIngredient()}
                                                 style={{ marginBottom: 30 }}>מחק רכיב</Button>
                                             <Button mode="contained" color="black"
                                                 onPress={() => { setTextArrTemp(null) }}>חזור לשאר הרכיבים</Button>
-                                        </View> : null}
+                                        </View> :
+                                            null
+                                        }
+
                                     </View>
 
                             }
 
+
                         </View>
+
                 }
 
             </View>
 
-            <View style={styles.button_container}>
+            <View style={{ backgroundColor: 'black', }}>
+                <View style={styles.button_camera_container}>
+                    <Ionicons.Button size={40} name="camera" iconStyle={{ marginRight: 0 }} backgroundColor="black" color="white"
+                        onPress={() => setScreen("camera")} />
 
-                <Button color='black' mode="contained"
-                    onPress={() => { setImage(null), setTextArr(null), setTextDict({}) }} >מצלמה</Button>
-                <Button color='black' mode="contained" onPress={() => takePicture()} >צלם מוצר</Button>
-                <Button color='black' mode="contained" onPress={() => pickImage()} >קבל רכיבים</Button>
+                    <MaterialIcons.Button size={40} name="motion-photos-on" iconStyle={{ marginRight: 0 }} backgroundColor="black" color="white"
+                        onPress={() => {
+                            if (screen === "camera")
+                                takePicture()
+                        }
+                        } />
+
+
+                    <MaterialIcons.Button size={40} name="image-search" iconStyle={{ marginRight: 0 }} backgroundColor="black" color="white"
+                        onPress={() => {
+                            if (screen === "image")
+                                getData()
+                            else if (textArr === null)
+                                Alert.alert("אין רכיבים להצגה")
+                            else
+                                setScreen("ingredients")
+
+                        }
+                        } />
+
+
+
+                </View>
+                <View style={styles.button_container}>
+                    <SaveProductModal saveProduct={(name, category) => saveProduct(name, category)} />
+
+                    <AddIngModal addIng={(ing) => addIngredient(ing)} />
+                </View>
             </View>
-            <View style={styles.button_container}>
-                <Button color='blue' mode="contained">שמור מוצר</Button>
-                <AddIngModal addIng={(ing) => getIngExplansion([ing], true, true)} />
-            </View>
+
         </View >
 
     )
@@ -374,18 +405,43 @@ const styles = StyleSheet.create({
 
     camera_container: {
         flex: 1,
-        marginBottom: 10
     },
     fixed_ratio: {
         flex: 1,
     },
+    button_camera_container: {
+        marginBottom: 5,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 5
+    },
     button_container: {
         marginBottom: 5,
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        justifyContent: 'space-around',
         alignItems: 'center',
-        padding: 10
-    }
+        padding: 10,
+    },
+    container: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'white',
+    },
+    outerCircle: {
+        borderRadius: 40,
+        width: 80,
+        height: 80,
+        backgroundColor: 'white',
+    },
+    innerCircle: {
+        borderRadius: 35,
+        width: 70,
+        height: 70,
+        margin: 5,
+        backgroundColor: 'black'
+    },
 })
 
 
